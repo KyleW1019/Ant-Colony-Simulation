@@ -1,0 +1,10 @@
+cmake_minimum_required(VERSION 3.16)
+project(AntColonySim)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
+
+find_package(SDL2 REQUIRED)
+
+add_executable(AntColonySim src/main.cpp)
+target_link_libraries(AntColonySim SDL2::SDL2main SDL2::SDL2)
