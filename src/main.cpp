@@ -4,6 +4,15 @@
 #include <cmath>
 #include <vector>
 
+struct Home {
+    float x;
+    float y;
+    void setHome(float x1, float y1){
+        x = x1;
+        y = y1;
+    }
+};
+
 struct Ant {
     float x;
     float y;
@@ -35,7 +44,28 @@ struct Ant {
         dirX = cos(angle);
         dirY = sin(angle);
     }
+    void goHome(Home home) {
+        float angle = atan2(home.y - y, home.x - x);
+        dirX = cos(angle);
+        dirY = sin(angle);
+    }
 };
+
+struct Food {
+    float x;
+    float y;
+
+    void spawnRandom() {
+        x = rand() % 800;
+        y = rand() % 600;
+    }
+};
+
+float calcDist(float antx, float anty, float foodx, float foody){
+    float distx = antx - foodx;
+    float disty = anty - foody;
+    return sqrt((distx*distx) + (disty*disty));
+}
 
 int main(int argc, char* argv[]) {
     if(SDL_Init(SDL_INIT_VIDEO) != 0){
@@ -62,12 +92,16 @@ int main(int argc, char* argv[]) {
         ant.y = 300;
         ant.speed = 2.0f;
         ant.hasFood = false;
-        ant.randomizeMovement();
+        ant.randomizeMovement();  
         ants.push_back(ant);
     }
     //srand(SDL_GetTicks());
     //ant.randomizeMovement();
+    Food food;
+    food.spawnRandom();
 
+    Home home;
+    home.setHome(400, 300);
     int frameCount = 0;
 
     while(running) {
@@ -85,20 +119,47 @@ int main(int argc, char* argv[]) {
         frameCount++;
         if (frameCount % 60 == 0) {
             for (Ant& ant : ants) {
-                ant.randomizeMovement();
+                if(!ant.hasFood){
+                    ant.randomizeMovement();
+                }
             }
         }
+
+        for (Ant& ant:ants) {
+            if(calcDist(ant.x, ant.y, food.x, food.y) < 15) {
+                ant.hasFood = true;
+                ant.goHome(home);
+            }
+        }
+
         //ant.checkBoundaries();
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
-        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+        //SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
         for (Ant& ant : ants) {
+            if(ant.hasFood) {
+                SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
+                if(calcDist(ant.x, ant.y, home.x, home.y) < 15){
+                    ant.hasFood = false;
+                }
+            }
+        
+            else {
+                SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+            }
             SDL_Rect rect = {(int)ant.x, (int)ant.y, 20, 20};
             SDL_RenderFillRect(renderer, &rect);
         }
-        //SDL_RenderFillRect(renderer, &rect);
+        SDL_Rect foodRect = {(int)food.x, (int)food.y, 10, 10};
+        SDL_Rect homeRect = {(int)home.x, (int)home.y, 10, 10};
+        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+        SDL_RenderFillRect(renderer, &foodRect);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
+        SDL_RenderFillRect(renderer, &homeRect);
         SDL_RenderPresent(renderer);
         SDL_Delay(8);
+
+
     }
 
     std::cout << "Hello, Ant Colony!\n";
