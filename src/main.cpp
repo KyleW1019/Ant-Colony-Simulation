@@ -13,6 +13,44 @@ struct Home {
     }
 };
 
+struct Pheromone {
+    float cells[200][150];
+
+    void deposit(float x, float y) {
+        int gridX = (int)(x / 4);
+        int gridY = (int)(y / 4);
+        if (gridX < 0 || gridX >= 200 || gridY < 0 || gridY >= 150) return;
+        cells[gridX][gridY] += 0.5f;
+        if (cells[gridX][gridY] > 1.0f) {
+            cells[gridX][gridY] = 1.0f;
+        }
+    }
+    void decay() {
+        for (int x = 0; x < 200; x++) {
+            for (int y = 0; y < 150; y++) {
+                cells[x][y] *= 0.99;
+            }
+        }
+    }
+    void draw(SDL_Renderer* renderer) {
+        for (int x = 0; x < 200; x++) {
+            for (int y = 0; y < 150; y++) {
+
+                if (cells[x][y] > 0.01f) {
+                    SDL_SetRenderDrawColor(renderer, 255, 200, 0, (int)(cells[x][y] * 255));
+                    SDL_Rect rect = {x * 4, y * 4, 4, 4};
+                    SDL_RenderFillRect(renderer, &rect);
+                }
+            }
+        }
+    }
+    Pheromone() {
+        for (int x = 0; x < 200; x++)
+            for (int y = 0; y < 150; y++)
+                cells[x][y] = 0.0f;
+    }
+};
+
 struct Ant {
     float x;
     float y;
@@ -26,6 +64,7 @@ struct Ant {
         y += dirY * speed;
     }
     void checkBoundaries() {
+        if (hasFood) return;
         if(int(x) >= 800){
             x = 0;
         }
@@ -49,6 +88,34 @@ struct Ant {
         dirX = cos(angle);
         dirY = sin(angle);
     }
+    void followPheromone(Pheromone& grid) {
+        float bestStrength = 0.0f;
+        float bestDirX = dirX;
+        float bestDirY = dirY;
+
+        for (int i = -2; i <= 2; i++) {
+            float angle = atan2(dirY, dirX) + i * 0.5f;
+            float checkX = x + cos(angle) * 20;
+            float checkY = y + sin(angle) * 20;
+
+            int gridX = (int)(checkX / 4);
+            int gridY = (int)(checkY / 4);
+
+            if (gridX < 0 || gridX >= 200 || gridY < 0 || gridY >= 150) continue;
+
+            float strength = grid.cells[gridX][gridY];
+            if (strength > bestStrength) {
+                bestStrength = strength;
+                bestDirX = cos(angle);
+                bestDirY = sin(angle);
+            }
+        }
+
+        if (bestStrength > 0.05f) {
+            dirX = bestDirX;
+            dirY = bestDirY;
+        }
+    };
 };
 
 struct Food {
@@ -60,6 +127,8 @@ struct Food {
         y = rand() % 600;
     }
 };
+
+
 
 float calcDist(float antx, float anty, float foodx, float foody){
     float distx = antx - foodx;
@@ -81,12 +150,13 @@ int main(int argc, char* argv[]) {
     );
 
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
     bool running = true;
     srand(SDL_GetTicks());
 
     std::vector<Ant> ants;
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 100; i++) {
         Ant ant;
         ant.x = 400;
         ant.y = 300;
@@ -104,6 +174,8 @@ int main(int argc, char* argv[]) {
     home.setHome(400, 300);
     int frameCount = 0;
 
+    Pheromone pheromone;
+
     while(running) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -115,6 +187,11 @@ int main(int argc, char* argv[]) {
         for (Ant& ant : ants) {
             ant.update();
             ant.checkBoundaries();
+            if (!ant.hasFood) {
+                ant.followPheromone(pheromone);
+            } else {
+                ant.goHome(home);
+            }
         }
         frameCount++;
         if (frameCount % 60 == 0) {
@@ -125,10 +202,13 @@ int main(int argc, char* argv[]) {
             }
         }
 
+        pheromone.decay();
+
         for (Ant& ant:ants) {
             if(calcDist(ant.x, ant.y, food.x, food.y) < 15) {
                 ant.hasFood = true;
                 ant.goHome(home);
+                //pheromone.deposit(ant.x, ant.y);
             }
         }
 
@@ -142,6 +222,7 @@ int main(int argc, char* argv[]) {
                 if(calcDist(ant.x, ant.y, home.x, home.y) < 15){
                     ant.hasFood = false;
                 }
+                pheromone.deposit(ant.x, ant.y);
             }
         
             else {
@@ -156,6 +237,7 @@ int main(int argc, char* argv[]) {
         SDL_RenderFillRect(renderer, &foodRect);
         SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
         SDL_RenderFillRect(renderer, &homeRect);
+        pheromone.draw(renderer);
         SDL_RenderPresent(renderer);
         SDL_Delay(8);
 
